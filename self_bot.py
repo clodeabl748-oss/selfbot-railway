@@ -2970,8 +2970,17 @@ class TelegramAccount:
             print(f"خطا در نوشتن داده‌ها برای {self.phone}: {e}")
     
     async def check_expiration(self):
-        """بررسی انقضای اکانت"""
+        """بررسی انقضای اکانت
+
+        Grace note: the first validity check must NOT run immediately after
+        startup.  During activation the parent bot writes self_enabled=1 and
+        the session record into users.db only after this child reports
+        "ready", so an immediate check reads the stale self_enabled=0 row and
+        mislabels a freshly-activated account as expired and kills it.
+        Sleep first, then poll.
+        """
         while self.is_running and not self.shutdown_requested:
+            await asyncio.sleep(60)
             if not self.is_self_valid():
                 print(f"❌ اکانت {self.phone} منقضی شده است. توقف...")
                 await send_to_admin(self.client, f"❌ اکانت {self.phone} منقضی شده است", self.phone)
@@ -2981,7 +2990,6 @@ class TelegramAccount:
                 )
                 await self.client.disconnect()
                 break
-            await asyncio.sleep(60)
     
     def is_self_valid(self):
         """Validate subscription with ISO-aware parsing and fail closed."""
